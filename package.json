@@ -1,0 +1,23 @@
+{
+  "name": "programmable-promises",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @pp/shared && npm run build -w @pp/api && npm run build -w @pp/web",
+    "build:api": "npm run build -w @pp/shared && npm run build -w @pp/api",
+    "dev:api": "npm run build -w @pp/shared && npm run dev -w @pp/api",
+    "dev:web": "npm run start -w @pp/web",
+    "test": "node --import tsx --test packages/shared/src/decision.test.ts packages/shared/src/transitions.test.ts apps/api/src/images/phash.test.ts",
+    "eval": "node eval/accuracy.mjs"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3"
+  },
+  "overrides": {
+    "esbuild": "0.25.12"
+  }
+}

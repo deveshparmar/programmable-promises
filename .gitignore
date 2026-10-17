@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.angular/
+coverage/
+uploads/
+.env
+*.log
+.DS_Store
+apps/web/dist/
+apps/api/dist/
+packages/shared/dist/
