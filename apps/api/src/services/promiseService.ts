@@ -200,7 +200,7 @@ export async function submitProof(promise: PromiseRow, file: Express.Multer.File
   const mime = assertImage(file.buffer, file.mimetype);
   const contentHash = sha256(file.buffer);
   const perceptual = perceptualHash(file.buffer, mime);
-  const prior = await listHashes();
+  const prior = await listHashes(promise.id);
   if (prior.some((row) => row.content_hash === contentHash)) {
     throw new HttpError(409, "DUPLICATE_PROOF", "That photo was already submitted.");
   }

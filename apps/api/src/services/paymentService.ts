@@ -146,18 +146,19 @@ async function pay(promise: PromiseRow): Promise<PromiseRow> {
     await poolEvent(client, promise.id, "api.payout", { payout_batch_id: batchId });
   });
   let itemStatus = "PENDING";
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  const terminalFail = ["FAILED", "DENIED", "BLOCKED", "RETURNED", "REFUNDED", "CANCELED"];
+  for (let attempt = 0; attempt < 24; attempt += 1) {
     itemStatus = await payoutItemStatus(batchId);
     if (itemStatus === "SUCCESS") {
       const paid = await withTx(async (client) => transitionStatus(client, promise.id, "CAPTURED", "PAID", null));
       await emit(paid);
       return paid;
     }
-    if (["FAILED", "DENIED", "BLOCKED", "RETURNED", "REFUNDED", "CANCELED"].includes(itemStatus)) break;
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    if (terminalFail.includes(itemStatus)) break;
+    await new Promise((resolve) => setTimeout(resolve, 2500));
   }
   if (itemStatus === "SUCCESS") return must(promise.id);
-  if (["FAILED", "DENIED", "BLOCKED", "RETURNED", "REFUNDED", "CANCELED"].includes(itemStatus)) {
+  if (terminalFail.includes(itemStatus)) {
     const failed = await withTx(async (client) =>
       transitionStatus(client, promise.id, "CAPTURED", "PAYMENT_FAILED", `Payout item is ${itemStatus}.`),
     );
@@ -165,8 +166,12 @@ async function pay(promise: PromiseRow): Promise<PromiseRow> {
     return failed;
   }
   const waiting = await must(promise.id);
+  const pendingDetail =
+    itemStatus === "PENDING" || itemStatus === "UNCLAIMED" || itemStatus === "ONHOLD"
+      ? "PayPal is still sending the payout. Wait a moment, then use Retry payment."
+      : `Payout item is ${itemStatus}.`;
   await withTx(async (client) => {
-    await patchPromise(client, waiting.id, { status_detail: `Payout item is ${itemStatus}.` });
+    await patchPromise(client, waiting.id, { status_detail: pendingDetail });
   });
   return must(promise.id);
 }

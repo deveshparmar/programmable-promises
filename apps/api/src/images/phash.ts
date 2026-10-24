@@ -2,7 +2,8 @@ import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
 import { HttpError } from "../errors.js";
 
-export const DUPLICATE_HAMMING = 6;
+/** Only block near-identical frames; loose thresholds false-positive on plain backgrounds. */
+export const DUPLICATE_HAMMING = 2;
 
 export function averageHash(rgba: Uint8Array, width: number, height: number): string {
   const size = 8;

@@ -185,13 +185,15 @@ export async function nextAttempt(client: DbClient, promiseId: string): Promise<
   return Number(result.rows[0]?.count ?? 0) + 1;
 }
 
-export async function listHashes(): Promise<{ content_hash: string; perceptual_hash: string | null }[]> {
+export async function listHashes(promiseId: string): Promise<{ content_hash: string; perceptual_hash: string | null }[]> {
   const result = await pool.query<{ content_hash: string; perceptual_hash: string | null }>(
     `SELECT s.content_hash, s.perceptual_hash
      FROM submissions s
-     WHERE NOT EXISTS (
-       SELECT 1 FROM verifications v WHERE v.submission_id = s.id AND v.verdict = 'error'
-     )`,
+     WHERE s.promise_id = $1
+       AND NOT EXISTS (
+         SELECT 1 FROM verifications v WHERE v.submission_id = s.id AND v.verdict = 'error'
+       )`,
+    [promiseId],
   );
   return result.rows;
 }
