@@ -6,7 +6,21 @@ import { redis } from "../redis.js";
 interface PayPalErrorBody {
   message?: string;
   name?: string;
-  details?: { issue?: string; description?: string }[];
+  details?: { field?: string; issue?: string; description?: string; link?: { href?: string }[] }[];
+  links?: { href?: string }[];
+}
+
+function existingPayoutBatchId(body: Record<string, unknown>): string | undefined {
+  const details = body as PayPalErrorBody;
+  const duplicate = details.details?.find(
+    (detail) =>
+      detail.field === "SENDER_BATCH_ID" ||
+      (detail.issue ?? "").toLowerCase().includes("sender_batch_id"),
+  );
+  const href = duplicate?.link?.[0]?.href ?? details.links?.[0]?.href;
+  if (!href) return undefined;
+  const match = href.match(/\/payouts\/([^/?]+)/i);
+  return match?.[1];
 }
 
 async function paypalFetch(path: string, init: RequestInit, requestId?: string): Promise<Response> {
@@ -54,7 +68,8 @@ function fail(response: Response, body: Record<string, unknown>): never {
 }
 
 export async function accessToken(): Promise<string> {
-  const cached = await redis.get("paypal:access_token");
+  const cacheKey = `paypal:access_token:${config.paypalClientId.slice(0, 12)}`;
+  const cached = await redis.get(cacheKey);
   if (cached) return cached;
   const secret = Buffer.from(`${config.paypalClientId}:${config.paypalClientSecret}`).toString("base64");
   const response = await fetch(`${paypalBaseUrl}/v1/oauth2/token`, {
@@ -69,7 +84,7 @@ export async function accessToken(): Promise<string> {
   if (!response.ok || typeof body.access_token !== "string") fail(response, body);
   const expiresIn = typeof body.expires_in === "number" ? body.expires_in : 300;
   const ttl = Math.max(30, expiresIn - 60);
-  await redis.set("paypal:access_token", body.access_token, "EX", ttl);
+  await redis.set(cacheKey, body.access_token, "EX", ttl);
   return body.access_token;
 }
 
@@ -163,14 +178,19 @@ export async function captureAuthorization(authorizationId: string, promiseId: s
   return body.id;
 }
 
-export async function payoutWorker(promiseId: string, workerEmail: string, amountMinor: number): Promise<string> {
+export async function payoutWorker(
+  promiseId: string,
+  workerEmail: string,
+  amountMinor: number,
+  payoutKey: string,
+): Promise<string> {
   const response = await paypalFetch(
     "/v1/payments/payouts",
     {
       method: "POST",
       body: JSON.stringify({
         sender_batch_header: {
-          sender_batch_id: promiseId,
+          sender_batch_id: payoutKey,
           email_subject: "You were paid for a completed promise",
           email_message: "Programmable Promises released this payment because the work checked out.",
         },
@@ -185,10 +205,14 @@ export async function payoutWorker(promiseId: string, workerEmail: string, amoun
         ],
       }),
     },
-    `${promiseId}:payout`,
+    `${payoutKey}:payout`,
   );
   const body = await readJson(response);
-  if (!response.ok) fail(response, body);
+  if (!response.ok) {
+    const existingBatchId = existingPayoutBatchId(body);
+    if (existingBatchId) return existingBatchId;
+    fail(response, body);
+  }
   const header = body.batch_header as { payout_batch_id?: string } | undefined;
   if (!header?.payout_batch_id) {
     throw new HttpError(502, "PAYPAL_ERROR", "PayPal did not accept the payout.");

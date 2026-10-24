@@ -130,7 +130,8 @@ async function pay(promise: PromiseRow): Promise<PromiseRow> {
   let batchId = promise.paypal_payout_batch_id;
   if (!batchId) {
     try {
-      batchId = await payoutWorker(promise.id, promise.worker_email, promise.amount_minor);
+      const payoutKey = promise.paypal_capture_id ? `${promise.id}:${promise.paypal_capture_id}` : promise.id;
+      batchId = await payoutWorker(promise.id, promise.worker_email, promise.amount_minor, payoutKey);
     } catch (error) {
       const detail = error instanceof HttpError ? error.message : "PayPal could not send the payout.";
       const failed = await withTx(async (client) =>
