@@ -1,14 +1,19 @@
 import { HttpInterceptorFn, provideHttpClient, withInterceptors } from "@angular/common/http";
 import { ApplicationConfig } from "@angular/core";
 import { provideRouter } from "@angular/router";
-import { SKIP_PAYER_AUTH } from "./api.service";
+import { SHARE_TOKEN, SKIP_PAYER_AUTH } from "./api.service";
 import { routes } from "./app.routes";
 
 const authInterceptor: HttpInterceptorFn = (req, next) => {
-  if (req.context.get(SKIP_PAYER_AUTH)) return next(req);
-  const token = sessionStorage.getItem("pp_token");
-  if (!token) return next(req);
-  return next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }));
+  const shareToken = req.context.get(SHARE_TOKEN);
+  const payerToken = req.context.get(SKIP_PAYER_AUTH) ? null : sessionStorage.getItem("pp_token");
+  if (!shareToken && !payerToken) return next(req);
+  return next(req.clone({
+    setHeaders: {
+      ...(shareToken ? { "X-Share-Token": shareToken } : {}),
+      ...(payerToken ? { Authorization: `Bearer ${payerToken}` } : {}),
+    },
+  }));
 };
 
 export const appConfig: ApplicationConfig = {

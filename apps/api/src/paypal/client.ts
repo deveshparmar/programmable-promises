@@ -36,13 +36,21 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 function fail(response: Response, body: Record<string, unknown>): never {
   const details = body as PayPalErrorBody;
   console.error("PayPal error", response.status, JSON.stringify(details).slice(0, 1000));
+  if (details.name === "PAYOUT_NOT_AVAILABLE") {
+    throw new HttpError(
+      502,
+      "PAYOUT_NOT_AVAILABLE",
+      "PayPal sandbox payouts are not allowed for this business account country. Create a United States sandbox business account with Payouts enabled.",
+    );
+  }
   const alreadyVoided = details.details?.some((detail) =>
     `${detail.issue ?? ""} ${detail.description ?? ""}`.toLowerCase().includes("already"),
   );
   if (alreadyVoided || response.status === 422) {
     throw new HttpError(409, "PAYPAL_STATE", "PayPal would not repeat that step. Refresh the promise and try again.");
   }
-  throw new HttpError(502, "PAYPAL_ERROR", "PayPal could not complete this step.");
+  const message = details.message?.trim();
+  throw new HttpError(502, "PAYPAL_ERROR", message ? message.slice(0, 240) : "PayPal could not complete this step.");
 }
 
 export async function accessToken(): Promise<string> {
@@ -65,20 +73,53 @@ export async function accessToken(): Promise<string> {
   return body.access_token;
 }
 
+const ORDER_APPROVAL_MS = 2 * 60 * 60 * 1000;
+
+export async function approvableOrder(orderId: string): Promise<boolean> {
+  const response = await paypalFetch(`/v2/checkout/orders/${orderId}`, { method: "GET" });
+  const body = await readJson(response);
+  const units = body.purchase_units as { items?: unknown[] }[] | undefined;
+  if (!response.ok || body.status !== "CREATED" || typeof body.create_time !== "string") return false;
+  if (!units?.[0]?.items?.length) return false;
+  const ageMs = Date.now() - Date.parse(body.create_time);
+  return ageMs >= 0 && ageMs < ORDER_APPROVAL_MS;
+}
+
 export async function createOrder(promiseId: string, amountMinor: number): Promise<string> {
+  const attempt = Date.now().toString();
+  const value = minorToDecimal(amountMinor);
   const response = await paypalFetch("/v2/checkout/orders", {
     method: "POST",
     body: JSON.stringify({
       intent: "AUTHORIZE",
+      application_context: {
+        brand_name: "Programmable Promises",
+        shipping_preference: "NO_SHIPPING",
+        user_action: "CONTINUE",
+      },
       purchase_units: [
         {
           custom_id: promiseId,
-          invoice_id: promiseId,
-          amount: { currency_code: "USD", value: minorToDecimal(amountMinor) },
+          invoice_id: `${promiseId}:${attempt}`,
+          description: "Hold for a programmable promise",
+          amount: {
+            currency_code: "USD",
+            value,
+            breakdown: { item_total: { currency_code: "USD", value } },
+          },
+          items: [
+            {
+              name: "Promise hold",
+              description: "The worker is paid only after the photo passes.",
+              quantity: "1",
+              category: "DIGITAL_GOODS",
+              unit_amount: { currency_code: "USD", value },
+            },
+          ],
         },
       ],
     }),
-  }, `${promiseId}:order`);
+  }, `${promiseId}:order:${attempt}`);
   const body = await readJson(response);
   if (!response.ok || typeof body.id !== "string") fail(response, body);
   return body.id;

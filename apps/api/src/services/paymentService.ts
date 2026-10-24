@@ -12,6 +12,7 @@ import {
 import { withLock } from "../redis.js";
 import { publish } from "../sse.js";
 import {
+  approvableOrder,
   authorizeOrder,
   captureAuthorization,
   createOrder,
@@ -32,7 +33,8 @@ async function emit(promise: PromiseRow): Promise<void> {
 export async function createFundingOrder(promiseId: string, payerId: string): Promise<{ order_id: string }> {
   const promise = await owned(promiseId, payerId);
   if (promise.paypal_order_id && (promise.status === "AWAITING_FUNDING" || promise.status === "FUNDED")) {
-    return { order_id: promise.paypal_order_id };
+    const stillApprovable = promise.status === "FUNDED" || await approvableOrder(promise.paypal_order_id).catch(() => false);
+    if (stillApprovable) return { order_id: promise.paypal_order_id };
   }
   if (promise.status !== "AWAITING_FUNDING") {
     throw new HttpError(409, "STATE_CONFLICT", "Confirm the checklist before funding.");
@@ -125,11 +127,19 @@ async function capture(promise: PromiseRow): Promise<PromiseRow> {
 }
 
 async function pay(promise: PromiseRow): Promise<PromiseRow> {
-  const batchId = promise.paypal_payout_batch_id ?? (await payoutWorker(
-    promise.id,
-    promise.worker_email,
-    promise.amount_minor,
-  ));
+  let batchId = promise.paypal_payout_batch_id;
+  if (!batchId) {
+    try {
+      batchId = await payoutWorker(promise.id, promise.worker_email, promise.amount_minor);
+    } catch (error) {
+      const detail = error instanceof HttpError ? error.message : "PayPal could not send the payout.";
+      const failed = await withTx(async (client) =>
+        transitionStatus(client, promise.id, "CAPTURED", "PAYMENT_FAILED", detail),
+      );
+      await emit(failed);
+      return failed;
+    }
+  }
   await withTx(async (client) => {
     await patchPromise(client, promise.id, { paypal_payout_batch_id: batchId });
     await poolEvent(client, promise.id, "api.payout", { payout_batch_id: batchId });

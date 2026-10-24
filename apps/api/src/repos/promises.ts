@@ -187,7 +187,11 @@ export async function nextAttempt(client: DbClient, promiseId: string): Promise<
 
 export async function listHashes(): Promise<{ content_hash: string; perceptual_hash: string | null }[]> {
   const result = await pool.query<{ content_hash: string; perceptual_hash: string | null }>(
-    "SELECT content_hash, perceptual_hash FROM submissions",
+    `SELECT s.content_hash, s.perceptual_hash
+     FROM submissions s
+     WHERE NOT EXISTS (
+       SELECT 1 FROM verifications v WHERE v.submission_id = s.id AND v.verdict = 'error'
+     )`,
   );
   return result.rows;
 }

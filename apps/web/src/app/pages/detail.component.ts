@@ -42,6 +42,9 @@ declare global {
             <h2>Checklist</h2>
             <p>{{ current.description }}</p>
             @if (editable()) {
+              @if (!draft().length) {
+                <p class="note">No checklist items yet. Add one, then confirm.</p>
+              }
               @for (item of draft(); track $index) {
                 <div class="check">
                   <input [(ngModel)]="item.text" [name]="'text' + $index" />
@@ -145,8 +148,18 @@ export class DetailComponent implements OnDestroy {
   save(confirm: boolean): void {
     const current = this.promise();
     if (!current) return;
+    const items = this.draft().map((item) => ({ text: item.text.trim(), weight: Number(item.weight), required: item.required }));
+    if (!items.length) {
+      this.error.set("Add at least one checklist item.");
+      return;
+    }
+    if (items.some((item) => item.text.length < 3 || !(item.weight > 0))) {
+      this.error.set("Each item needs a short description and a weight above 0.");
+      return;
+    }
+    this.error.set("");
     this.api.saveChecklist(current.id, {
-      items: this.draft().map((item) => ({ text: item.text, weight: Number(item.weight), required: item.required })),
+      items,
       pass_threshold: current.pass_threshold,
       confirm,
     }).subscribe({

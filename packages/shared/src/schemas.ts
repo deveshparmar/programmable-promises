@@ -41,7 +41,7 @@ export const createPromiseSchema = z.object({
 });
 
 export const updateChecklistSchema = z.object({
-  items: z.array(checklistItemSchema).min(1).max(8),
+  items: z.array(checklistItemSchema).min(1, "Add at least one checklist item.").max(8),
   pass_threshold: z.number().min(0.5).max(1).optional(),
   confirm: z.boolean().optional(),
   deadline_at: z.string().min(1).optional(),

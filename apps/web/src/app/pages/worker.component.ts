@@ -6,6 +6,7 @@ import { money, pillClass, statusLabel, type PromiseView, type Verification } fr
 @Component({
   selector: "app-worker",
   template: `
+    @if (error() && !promise()) { <p class="error">{{ error() }}</p> }
     @if (promise(); as current) {
       <section class="stack">
         <div class="row" style="justify-content: space-between;">

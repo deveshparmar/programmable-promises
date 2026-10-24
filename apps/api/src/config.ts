@@ -1,3 +1,14 @@
+function resolveAiModel(provider: string, requested: string): string {
+  const name = provider.toLowerCase();
+  if (name === "gemini" && (!requested || requested.startsWith("gpt-"))) return "gemini-3.5-flash-lite";
+  return requested || "gpt-4o-mini";
+}
+
+export function aiChatUrl(provider = config.aiProvider): string {
+  if (provider === "gemini") return "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  return "https://api.openai.com/v1/chat/completions";
+}
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing environment variable ${name}`);
@@ -13,9 +24,9 @@ export const config = {
   paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET ?? "",
   paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID ?? "",
   paypalMode: process.env.PAYPAL_MODE === "live" ? "live" : "sandbox",
-  aiProvider: process.env.AI_PROVIDER ?? "openai",
+  aiProvider: (process.env.AI_PROVIDER ?? "openai").toLowerCase(),
   aiApiKey: process.env.AI_API_KEY ?? "",
-  aiModel: process.env.AI_MODEL ?? "gpt-4o-mini",
+  aiModel: resolveAiModel(process.env.AI_PROVIDER ?? "openai", process.env.AI_MODEL ?? ""),
   appBaseUrl: (process.env.APP_BASE_URL ?? "http://localhost:4200").replace(/\/$/, ""),
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",
 };

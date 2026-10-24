@@ -108,8 +108,11 @@ export async function createPromise(input: {
     });
     checklist = saved;
   } catch (error) {
-    checklistError = error instanceof HttpError ? error.message : "Checklist generation failed. Edit one by hand.";
+    checklistError = error instanceof HttpError ? error.message : "Checklist generation failed. Add at least one item, then confirm.";
     console.error("Checklist generation failed", error);
+    await withTx(async (client) => {
+      await patchPromise(client, created.id, { status_detail: checklistError });
+    });
   }
   const promise = (await findPromiseById(created.id)) ?? created;
   const workerUrl = `${config.appBaseUrl}/w/${promise.id}/${shareToken}`;
@@ -155,6 +158,7 @@ export async function updateChecklist(
       checklist_version: version,
       pass_threshold: input.passThreshold ?? Number(promise.pass_threshold),
       deadline_at: deadline,
+      status_detail: null,
     });
     let current = (await findPromiseById(id, client))!;
     if (promise.status === "DRAFT" && input.confirm) {

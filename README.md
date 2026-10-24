@@ -37,7 +37,7 @@ The dev UI is [http://localhost:4200](http://localhost:4200). Copy `.env.example
 4. Create a personal sandbox account and use its email as the worker address.
 5. Optional: create a webhook for the events below and set `PAYPAL_WEBHOOK_ID`. The happy path does not wait on webhooks. PayPal Buttons call `POST /api/promises/:id/fund/confirm` directly, so localhost does not need a public URL.
 
-`AI_PROVIDER=openai` with `AI_API_KEY` and `AI_MODEL` (default `gpt-4o-mini`) does checklist generation and photo checks. `AI_PROVIDER=mock` saves a draft checklist and returns an unsure verdict so the review queue can be exercised without a model key.
+`AI_PROVIDER=openai` uses `AI_API_KEY` and `AI_MODEL` (default `gpt-4o-mini`). `AI_PROVIDER=gemini` uses a free Gemini key from [Google AI Studio](https://aistudio.google.com/apikey) and `gemini-3.5-flash-lite`, which can read photos. `AI_PROVIDER=mock` saves a draft checklist and returns an unsure verdict so the review queue can be exercised without a model key.
 
 ## What the demo does
 
