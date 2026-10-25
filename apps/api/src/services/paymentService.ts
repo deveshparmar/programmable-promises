@@ -1,6 +1,8 @@
 import { canTransition, EXPIRY_VOID_STATUSES, TERMINAL_MONEY_STATUSES } from "@pp/shared";
+import { kafkaEnabled } from "../config.js";
 import { pool, withTx, type DbClient } from "../db.js";
 import { HttpError } from "../errors.js";
+import { publishPaymentCommand, publishWebhookReceived } from "../kafka/publish.js";
 import {
   findPromiseById,
   findPromiseByPaypalIds,
@@ -197,22 +199,49 @@ export async function cancelPromise(promiseId: string, payerId: string): Promise
   return updated;
 }
 
+export async function requestSettle(promiseId: string): Promise<PromiseRow> {
+  if (kafkaEnabled()) {
+    await publishPaymentCommand({
+      messageId: crypto.randomUUID(),
+      promiseId,
+      command: "settle",
+    });
+    return must(promiseId);
+  }
+  return settle(promiseId);
+}
+
 export async function expireDue(): Promise<void> {
   const due = await listDue(new Date());
   for (const promise of due) {
     try {
-      if (promise.status === "AWAITING_FUNDING") {
-        const updated = await withTx(async (client) =>
-          transitionStatus(client, promise.id, "AWAITING_FUNDING", "CANCELLED", "The deadline passed before funding."),
-        );
-        await emit(updated);
+      if (kafkaEnabled()) {
+        await publishPaymentCommand({
+          messageId: crypto.randomUUID(),
+          promiseId: promise.id,
+          command: "expire",
+        });
         continue;
       }
-      if (EXPIRY_VOID_STATUSES.includes(promise.status)) await expireOne(promise);
+      await expireOneById(promise.id);
     } catch (error) {
       console.error("Expiry failed", promise.id, error);
     }
   }
+}
+
+export async function expireOneById(promiseId: string): Promise<void> {
+  const promise = await findPromiseById(promiseId);
+  if (!promise) return;
+  if (promise.deadline_at.getTime() > Date.now()) return;
+  if (promise.status === "AWAITING_FUNDING") {
+    const updated = await withTx(async (client) =>
+      transitionStatus(client, promise.id, "AWAITING_FUNDING", "CANCELLED", "The deadline passed before funding."),
+    );
+    await emit(updated);
+    return;
+  }
+  if (EXPIRY_VOID_STATUSES.includes(promise.status)) await expireOne(promise);
 }
 
 async function expireOne(promise: PromiseRow): Promise<PromiseRow> {
@@ -246,7 +275,32 @@ export async function recordWebhook(eventId: string, eventType: string, resource
      ON CONFLICT (paypal_event_id) DO NOTHING`,
     [promise?.id ?? null, eventType, eventId, JSON.stringify(resource)],
   );
-  if (!inserted.rowCount || !promise) return;
+  if (!inserted.rowCount) return;
+  if (kafkaEnabled()) {
+    await publishWebhookReceived({
+      messageId: crypto.randomUUID(),
+      eventId,
+      eventType,
+      resource,
+      promiseId: promise?.id ?? null,
+    });
+    return;
+  }
+  if (promise) await applyWebhook(promise, eventType, resource);
+}
+
+export async function applyWebhookEvent(
+  eventId: string,
+  eventType: string,
+  resource: Record<string, unknown>,
+  promiseIdHint: string | null,
+): Promise<void> {
+  void eventId;
+  let promise = promiseIdHint ? await findPromiseById(promiseIdHint) : undefined;
+  if (!promise) {
+    promise = await findPromiseByPaypalIds(collectIds(resource));
+  }
+  if (!promise) return;
   await applyWebhook(promise, eventType, resource);
 }
 

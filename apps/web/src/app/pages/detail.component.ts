@@ -1,8 +1,9 @@
 import { DatePipe } from "@angular/common";
-import { Component, ElementRef, OnDestroy, inject, signal, viewChild } from "@angular/core";
+import { Component, ElementRef, NgZone, OnDestroy, inject, signal, viewChild } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
 import { ApiService } from "../api.service";
+import { ToastService } from "../toast.service";
 import { money, pillClass, statusLabel, type ChecklistItem, type PromiseView, type Verification } from "../models";
 
 interface PayPalButtons {
@@ -96,19 +97,19 @@ declare global {
             </article>
           }
         </div>
-        @if (error()) { <p class="error">{{ error() }}</p> }
       </section>
     }
   `,
 })
 export class DetailComponent implements OnDestroy {
   private readonly api = inject(ApiService);
+  private readonly toast = inject(ToastService);
+  private readonly zone = inject(NgZone);
   private readonly route = inject(ActivatedRoute);
   private readonly paypalHost = viewChild<ElementRef<HTMLElement>>("paypal");
   readonly promise = signal<PromiseView | null>(null);
   readonly verifications = signal<Verification[]>([]);
   readonly draft = signal<ChecklistItem[]>([]);
-  readonly error = signal("");
   readonly workerUrl = signal("");
   readonly money = money;
   readonly statusLabel = statusLabel;
@@ -123,7 +124,7 @@ export class DetailComponent implements OnDestroy {
     const token = sessionStorage.getItem("pp_token");
     if (token) {
       this.source = new EventSource(`/api/promises/${id}/events?access_token=${encodeURIComponent(token)}`);
-      this.source.onmessage = () => this.reload();
+      this.source.onmessage = () => this.zone.run(() => this.reload());
     }
   }
 
@@ -150,14 +151,13 @@ export class DetailComponent implements OnDestroy {
     if (!current) return;
     const items = this.draft().map((item) => ({ text: item.text.trim(), weight: Number(item.weight), required: item.required }));
     if (!items.length) {
-      this.error.set("Add at least one checklist item.");
+      this.toast.error("Add at least one checklist item.");
       return;
     }
     if (items.some((item) => item.text.length < 3 || !(item.weight > 0))) {
-      this.error.set("Each item needs a short description and a weight above 0.");
+      this.toast.error("Each item needs a short description and a weight above 0.");
       return;
     }
-    this.error.set("");
     this.api.saveChecklist(current.id, {
       items,
       pass_threshold: current.pass_threshold,
@@ -166,9 +166,9 @@ export class DetailComponent implements OnDestroy {
       next: (promise) => {
         this.promise.set(promise);
         this.draft.set(promise.checklist.map((item) => ({ ...item })));
+        this.toast.success(confirm ? "Checklist confirmed. You can fund the promise now." : "Checklist draft saved.");
         setTimeout(() => this.mountPayPal());
       },
-      error: (error: Error) => this.error.set(error.message),
     });
   }
 
@@ -176,8 +176,10 @@ export class DetailComponent implements OnDestroy {
     const current = this.promise();
     if (!current) return;
     this.api.cancel(current.id).subscribe({
-      next: (promise) => this.promise.set(promise),
-      error: (error: Error) => this.error.set(error.message),
+      next: (promise) => {
+        this.promise.set(promise);
+        this.toast.info("The promise was cancelled and any hold was released.");
+      },
     });
   }
 
@@ -185,8 +187,12 @@ export class DetailComponent implements OnDestroy {
     const current = this.promise();
     if (!current) return;
     this.api.settle(current.id).subscribe({
-      next: (promise) => this.promise.set(promise),
-      error: (error: Error) => this.error.set(error.message),
+      next: (promise) => {
+        this.promise.set(promise);
+        if (promise.status === "PAID") this.toast.success("The worker has been paid.");
+        else if (promise.status === "PAYMENT_FAILED") this.toast.error(promise.status_detail ?? "Payout failed. Try again in a moment.");
+        else this.toast.info(promise.status_detail ?? "PayPal is still processing the payout.");
+      },
     });
   }
 
@@ -198,7 +204,6 @@ export class DetailComponent implements OnDestroy {
         if (!this.draft().length) this.draft.set(promise.checklist.map((item) => ({ ...item })));
         setTimeout(() => this.mountPayPal());
       },
-      error: (error: Error) => this.error.set(error.message),
     });
     this.api.verifications(id).subscribe({
       next: (result) => this.verifications.set(result.verifications),
@@ -211,8 +216,9 @@ export class DetailComponent implements OnDestroy {
     if (!host || !current || current.status !== "AWAITING_FUNDING" || this.paypalReady) return;
     this.api.config().subscribe({
       next: async (config) => {
+        try {
         if (!config.paypal_client_id) {
-          this.error.set("Add PAYPAL_CLIENT_ID before funding.");
+          this.toast.error("Add PAYPAL_CLIENT_ID to the environment before funding.");
           return;
         }
         if (!window.paypal && document.getElementById("paypal-sdk")) return;
@@ -240,11 +246,15 @@ export class DetailComponent implements OnDestroy {
               this.api.confirmFund(current.id).subscribe({ next: resolve, error: reject });
             });
             this.promise.set(updated);
+            this.toast.success("PayPal hold authorized. Money is held until the work passes.");
           },
-          onError: () => this.error.set("PayPal could not authorize the hold."),
+          onError: () => this.toast.error("PayPal could not authorize the hold."),
         }).render(host);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "PayPal could not load.";
+          this.toast.error(message);
+        }
       },
-      error: (error: Error) => this.error.set(error.message),
     });
   }
 

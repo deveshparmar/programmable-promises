@@ -55,6 +55,18 @@ export async function findUserByEmail(email: string): Promise<UserRow | undefine
   return result.rows[0];
 }
 
+export async function findOrCreatePayer(email: string, name: string): Promise<UserRow> {
+  const existing = await findUserByEmail(email);
+  if (existing) return existing;
+  const result = await pool.query<UserRow>(
+    `INSERT INTO users (email, name, role) VALUES ($1, $2, 'payer')
+     ON CONFLICT (email) DO UPDATE SET email = users.email
+     RETURNING id, email, name, role`,
+    [email, name],
+  );
+  return result.rows[0];
+}
+
 export async function findUserById(id: string): Promise<UserRow | undefined> {
   const result = await pool.query<UserRow>("SELECT id, email, name, role FROM users WHERE id = $1", [id]);
   return result.rows[0];
@@ -183,6 +195,18 @@ export async function nextAttempt(client: DbClient, promiseId: string): Promise<
     [promiseId],
   );
   return Number(result.rows[0]?.count ?? 0) + 1;
+}
+
+export async function findSubmissionById(
+  submissionId: string,
+): Promise<{ id: string; promise_id: string; storage_key: string; challenge_code: string } | undefined> {
+  const result = await pool.query<{
+    id: string;
+    promise_id: string;
+    storage_key: string;
+    challenge_code: string;
+  }>("SELECT id, promise_id, storage_key, challenge_code FROM submissions WHERE id = $1", [submissionId]);
+  return result.rows[0];
 }
 
 export async function listHashes(promiseId: string): Promise<{ content_hash: string; perceptual_hash: string | null }[]> {

@@ -2,6 +2,7 @@ import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { ApiService } from "../api.service";
+import { ToastService } from "../toast.service";
 import { localDateInput, toMinor } from "../models";
 
 @Component({
@@ -26,8 +27,8 @@ import { localDateInput, toMinor } from "../models";
             <input name="deadline" type="datetime-local" [(ngModel)]="deadline" required />
           </label>
         </div>
-        @if (error()) { <p class="error">{{ error() }}</p> }
         <button class="primary" type="submit" [disabled]="busy()">{{ busy() ? "Writing the checklist…" : "Create promise" }}</button>
+        @if (busy()) { <div class="progress-inline" aria-hidden="true"><div></div></div> }
       </form>
     </section>
   `,
@@ -35,21 +36,20 @@ import { localDateInput, toMinor } from "../models";
 export class CreateComponent {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
   description = "Pay $40 when a photo shows the logo files on a desk: a wordmark, a symbol, and both in black and white.";
   amount = "40.00";
   worker = "";
   deadline = localDateInput(new Date(Date.now() + 24 * 60 * 60 * 1000));
   readonly busy = signal(false);
-  readonly error = signal("");
 
   submit(): void {
     const amountMinor = toMinor(this.amount);
     if (amountMinor === null || amountMinor < 100) {
-      this.error.set("Enter at least $1.00, with at most two decimal places.");
+      this.toast.error("Enter at least $1.00, with at most two decimal places.");
       return;
     }
     this.busy.set(true);
-    this.error.set("");
     this.api.create({
       description: this.description,
       amount_minor: amountMinor,
@@ -60,12 +60,10 @@ export class CreateComponent {
         if (promise.worker_url && promise.share_token) {
           sessionStorage.setItem(`pp_worker_${promise.id}`, promise.worker_url);
         }
+        this.toast.success("Promise created. Confirm the checklist, then fund it.");
         void this.router.navigate(["/promises", promise.id]);
       },
-      error: (error: Error) => {
-        this.error.set(error.message);
-        this.busy.set(false);
-      },
+      error: () => this.busy.set(false),
     });
   }
 }

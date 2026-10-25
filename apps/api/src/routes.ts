@@ -2,14 +2,15 @@ import { Router } from "express";
 import multer from "multer";
 import { createPromiseSchema, reviewSchema, updateChecklistSchema } from "@pp/shared";
 import { requirePayer, requirePayerOrToken, requireToken, login } from "./auth.js";
-import { aiConfigured, config, paypalConfigured } from "./config.js";
+import { aiConfigured, config, kafkaEnabled, paypalConfigured } from "./config.js";
+import { kafkaPing } from "./kafka/client.js";
 import { pool } from "./db.js";
 import { HttpError } from "./errors.js";
 import { idempotent } from "./idempotency.js";
 import { redis } from "./redis.js";
 import { rateLimit } from "./redis.js";
 import { addClient, removeClient } from "./sse.js";
-import { cancelPromise, confirmFunding, createFundingOrder, settle } from "./services/paymentService.js";
+import { cancelPromise, confirmFunding, createFundingOrder, requestSettle } from "./services/paymentService.js";
 import { verifyWebhook } from "./paypal/client.js";
 import { recordWebhook } from "./services/paymentService.js";
 import {
@@ -37,10 +38,19 @@ export function apiRouter(): Router {
     try {
       await pool.query("SELECT 1");
       await redis.ping();
+      let kafka: string = "disabled";
+      if (kafkaEnabled()) {
+        try {
+          kafka = (await kafkaPing()) ? "up" : "down";
+        } catch {
+          kafka = "down";
+        }
+      }
       res.json({
         ok: true,
         postgres: "up",
         redis: "up",
+        kafka,
         paypal: paypalConfigured() ? "configured" : "unconfigured",
         ai: aiConfigured() ? "configured" : "unconfigured",
       });
@@ -219,7 +229,7 @@ export function apiRouter(): Router {
       const result = await idempotent(req, `payer:${req.payer!.id}:settle:${req.params.id}`, async () => {
         const promise = await findPromiseById(req.params.id);
         if (!promise || promise.payer_id !== req.payer!.id) throw new HttpError(404, "NOT_FOUND", "Promise not found.");
-        await settle(promise.id);
+        await requestSettle(promise.id);
         return { status: 200, body: await getPromise(promise.id, req.payer!.id) };
       });
       send(res, result.status, result.body);

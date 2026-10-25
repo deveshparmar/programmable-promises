@@ -1,9 +1,14 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { decide, statusAfterVerdict, type DecisionItem } from "@pp/shared";
+import { config, kafkaEnabled } from "../config.js";
 import { withTx } from "../db.js";
 import { HttpError } from "../errors.js";
+import { publishVerificationCompleted } from "../kafka/publish.js";
 import {
   countFails,
   findPromiseById,
+  findSubmissionById,
   listChecklist,
   transitionStatus,
   type PromiseRow,
@@ -11,6 +16,23 @@ import {
 import { publish } from "../sse.js";
 import { verifyProof } from "../verifier/model.js";
 import { settle } from "./paymentService.js";
+
+export async function runVerificationForSubmission(submissionId: string): Promise<void> {
+  const submission = await findSubmissionById(submissionId);
+  if (!submission) return;
+  const promise = await findPromiseById(submission.promise_id);
+  if (!promise || promise.status !== "VERIFYING") return;
+  const filePath = path.join(config.uploadDir, submission.storage_key);
+  const image = await readFile(filePath);
+  const mime = submission.storage_key.endsWith(".png") ? "image/png" : "image/jpeg";
+  await verifySubmission({
+    promise,
+    submissionId,
+    issuedCode: submission.challenge_code,
+    image,
+    mime,
+  });
+}
 
 export async function verifySubmission(input: {
   promise: PromiseRow;
@@ -98,13 +120,21 @@ export async function verifySubmission(input: {
     });
     await publish(input.promise.id, { type: "status", status: saved.status, at: new Date().toISOString() });
     if (saved.status === "APPROVED") {
-      try {
-        const paid = await settle(input.promise.id);
-        saved.status = paid.status;
-      } catch (error) {
-        console.error("Payment did not finish", error);
-        const latest = await findPromiseById(input.promise.id);
-        if (latest) saved.status = latest.status;
+      if (kafkaEnabled()) {
+        await publishVerificationCompleted({
+          messageId: crypto.randomUUID(),
+          promiseId: input.promise.id,
+          status: saved.status,
+        });
+      } else {
+        try {
+          const paid = await settle(input.promise.id);
+          saved.status = paid.status;
+        } catch (error) {
+          console.error("Payment did not finish", error);
+          const latest = await findPromiseById(input.promise.id);
+          if (latest) saved.status = latest.status;
+        }
       }
     }
     return saved;

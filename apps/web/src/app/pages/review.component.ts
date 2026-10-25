@@ -1,6 +1,7 @@
 import { Component, inject, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { ApiService } from "../api.service";
+import { ToastService } from "../toast.service";
 import { money, type PromiseView, type Verification } from "../models";
 
 @Component({
@@ -10,8 +11,7 @@ import { money, type PromiseView, type Verification } from "../models";
     <section class="stack">
       <h1>Decisions waiting on you</h1>
       <p class="lede">Unsure photos, failed checks after three tries, and verifier errors land here. Approving pays. Denying releases the hold.</p>
-      @if (error()) { <p class="error">{{ error() }}</p> }
-      @if (!items().length) { <div class="card">Nothing is waiting.</div> }
+      @if (!items().length && loaded()) { <div class="card">Nothing is waiting.</div> }
       @for (item of items(); track item.promise.id) {
         <article class="card stack">
           <div class="row" style="justify-content: space-between;">
@@ -38,8 +38,9 @@ import { money, type PromiseView, type Verification } from "../models";
 })
 export class ReviewComponent {
   private readonly api = inject(ApiService);
+  private readonly toast = inject(ToastService);
   readonly items = signal<{ promise: PromiseView; verification?: Verification }[]>([]);
-  readonly error = signal("");
+  readonly loaded = signal(false);
   readonly money = money;
 
   constructor() {
@@ -54,14 +55,17 @@ export class ReviewComponent {
       worker_email: promise.worker_email,
       checklist_version: promise.checklist_version,
     }).subscribe({
-      next: () => this.load(),
-      error: (error: Error) => this.error.set(error.message),
+      next: () => {
+        this.toast.success(decision === "approve" ? "Approved. Payment is processing." : "Denied. The hold was released.");
+        this.load();
+      },
     });
   }
 
   private load(): void {
     this.api.list().subscribe({
       next: (promises) => {
+        this.loaded.set(true);
         const waiting = promises.filter((promise) => promise.status === "NEEDS_REVIEW");
         this.items.set(waiting.map((promise) => ({ promise })));
         for (const promise of waiting) {
@@ -72,7 +76,7 @@ export class ReviewComponent {
           });
         }
       },
-      error: (error: Error) => this.error.set(error.message),
+      error: () => this.loaded.set(true),
     });
   }
 }

@@ -1,7 +1,8 @@
 import cors from "cors";
 import express from "express";
 import { ZodError } from "zod";
-import { config } from "./config.js";
+import { config, kafkaEnabled } from "./config.js";
+import { ensureKafkaTopics } from "./kafka/client.js";
 import { migrate, waitForDatabase } from "./db.js";
 import { HttpError } from "./errors.js";
 import { apiRouter } from "./routes.js";
@@ -39,6 +40,10 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 async function main(): Promise<void> {
   await waitForDatabase();
   await migrate();
+  if (kafkaEnabled()) {
+    await ensureKafkaTopics();
+    console.log("Kafka producers enabled");
+  }
   app.listen(config.port, () => {
     console.log(`API listening on ${config.port}`);
   });

@@ -15,6 +15,17 @@ function required(name: string): string {
   return value;
 }
 
+export function kafkaBrokers(): string[] {
+  return (process.env.KAFKA_BROKERS ?? "")
+    .split(",")
+    .map((broker) => broker.trim())
+    .filter(Boolean);
+}
+
+export function kafkaEnabled(): boolean {
+  return kafkaBrokers().length > 0;
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   databaseUrl: required("DATABASE_URL"),

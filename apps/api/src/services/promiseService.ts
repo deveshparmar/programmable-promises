@@ -22,7 +22,9 @@ import {
 } from "../repos/promises.js";
 import { withLock } from "../redis.js";
 import { publish } from "../sse.js";
-import { cancelPromise, settle } from "./paymentService.js";
+import { kafkaEnabled } from "../config.js";
+import { publishProofSubmitted } from "../kafka/publish.js";
+import { cancelPromise, requestSettle } from "./paymentService.js";
 import { verifySubmission } from "./verificationService.js";
 import { generateChecklist } from "../verifier/model.js";
 
@@ -230,6 +232,20 @@ export async function submitProof(promise: PromiseRow, file: Express.Multer.File
       return inserted.rows[0].id;
     });
     await publish(promise.id, { type: "status", status: "VERIFYING", at: new Date().toISOString() });
+    if (kafkaEnabled()) {
+      await publishProofSubmitted({
+        messageId: crypto.randomUUID(),
+        promiseId: promise.id,
+        submissionId,
+      });
+      return {
+        verdict: "pending",
+        score: null,
+        status: "VERIFYING",
+        workerFeedback: "Photo received. Checking now — this page will update in a few seconds.",
+        items: [],
+      };
+    }
     return verifySubmission({ promise, submissionId, issuedCode, image: file.buffer, mime });
   });
   if (!locked) throw new HttpError(409, "SUBMISSION_IN_PROGRESS", "A photo for this promise is already being checked.");
@@ -286,7 +302,7 @@ export async function reviewPromise(
   if (input.decision === "deny") {
     await cancelPromise(id, payerId);
   } else {
-    await settle(id);
+    await requestSettle(id);
   }
   return getPromise(id, payerId);
 }

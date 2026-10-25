@@ -15,8 +15,7 @@ import { money, pillClass, statusLabel, type PromiseView } from "../models";
         </div>
         <a class="primary" routerLink="/new">New promise</a>
       </div>
-      @if (error()) { <p class="error">{{ error() }}</p> }
-      @if (!promises().length && !error()) {
+      @if (!promises().length && loaded()) {
         <div class="card"><p>No promises yet. Create one and fund it in the PayPal sandbox.</p></div>
       }
       <div class="list">
@@ -39,15 +38,18 @@ import { money, pillClass, statusLabel, type PromiseView } from "../models";
 export class ListComponent {
   private readonly api = inject(ApiService);
   readonly promises = signal<PromiseView[]>([]);
-  readonly error = signal("");
+  readonly loaded = signal(false);
   readonly money = money;
   readonly statusLabel = statusLabel;
   readonly pillClass = pillClass;
 
   constructor() {
     this.api.list().subscribe({
-      next: (promises) => this.promises.set(promises),
-      error: (error: Error) => this.error.set(error.message),
+      next: (promises) => {
+        this.promises.set(promises);
+        this.loaded.set(true);
+      },
+      error: () => this.loaded.set(true),
     });
   }
 }

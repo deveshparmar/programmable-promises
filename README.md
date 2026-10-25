@@ -13,7 +13,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Sign in as `payer@example.com`. There is no password.
+Sign in with any email (no password). Each payer only sees their own promises. `payer@example.com` is still seeded for older demos.
 
 Creating the PayPal sandbox app is a separate step, not part of the five-minute start. Without those keys the UI still runs, and funding returns a clear configuration error. A hosted demo is the backup when a judge will not create a sandbox app.
 
@@ -61,4 +61,5 @@ Checklist generation and proof verification use the OpenAI Chat Completions API 
 - Proofs are one jpg or png, up to 10 MB. PDF and URL proofs are not in this build.
 - Workers do not have accounts. The worker link is shown once and stored only as a hash.
 - Payout is marked paid when the payout item succeeds. If PayPal is still processing, the promise stays captured and **Retry payment** checks again. A failed payout is retried with the same batch id and is never captured twice.
-- Week 1 is a monolith: the API calls the verifier and PayPal in process. Postgres and Redis are required. Kafka is not in this build and is not required to submit.
+- With Docker Compose, **Redpanda** (`KAFKA_BROKERS=redpanda:9092`) runs a **worker** service that verifies photos, applies PayPal webhooks, and runs capture/payout off the request path. Leave `KAFKA_BROKERS` empty to use the Week 1 in-process path (local dev without Kafka).
+- PayPal webhooks: verify signature, store the event id (replay-safe), return **200** immediately, then process on the payment worker when Kafka is on.

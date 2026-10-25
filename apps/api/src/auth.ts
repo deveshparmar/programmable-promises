@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { config } from "./config.js";
 import { HttpError } from "./errors.js";
 import { hashToken, tokensMatch } from "./money.js";
-import { findPromiseById, findUserByEmail, findUserById } from "./repos/promises.js";
+import { findOrCreatePayer, findPromiseById, findUserById } from "./repos/promises.js";
 import type { PromiseRow, UserRow } from "./repos/promises.js";
 
 export interface AuthPayload {
@@ -15,9 +15,28 @@ export function signUser(user: UserRow): string {
   return jwt.sign({ sub: user.id, email: user.email }, config.jwtSecret, { expiresIn: "12h" });
 }
 
+function normalizeLoginEmail(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new HttpError(400, "INVALID_EMAIL", "Enter a valid email address.");
+  }
+  if (normalized.length > 200) {
+    throw new HttpError(400, "INVALID_EMAIL", "Email is too long.");
+  }
+  return normalized;
+}
+
+function payerNameFromEmail(email: string): string {
+  const local = email.split("@")[0] ?? "payer";
+  const label = local.replace(/[._+-]+/g, " ").trim();
+  if (!label) return "Payer";
+  return label.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+/** Demo auth: any valid email gets a payer row on first sign-in. No password. */
 export async function login(email: string): Promise<{ token: string; email: string; name: string }> {
-  const user = await findUserByEmail(email.toLowerCase());
-  if (!user) throw new HttpError(401, "UNKNOWN_PAYER", "That email is not a demo payer.");
+  const normalized = normalizeLoginEmail(email);
+  const user = await findOrCreatePayer(normalized, payerNameFromEmail(normalized));
   return { token: signUser(user), email: user.email, name: user.name };
 }
 
