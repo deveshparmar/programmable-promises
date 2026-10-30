@@ -12,7 +12,9 @@ import {
   latestVerificationId,
   listChecklist,
   listHashes,
+  countPromises,
   listPromises,
+  listPromisesPage,
   nextAttempt,
   patchPromise,
   replaceChecklist,
@@ -133,6 +135,24 @@ export async function getPromiseList(payerId: string): Promise<PublicPromise[]> 
     result.push(present(promise, await listChecklist(promise.id)));
   }
   return result;
+}
+
+export interface PaginatedPromises {
+  items: PublicPromise[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export async function getPromiseListPage(payerId: string, page: number, limit: number): Promise<PaginatedPromises> {
+  const total = await countPromises(payerId);
+  const total_pages = total === 0 ? 0 : Math.ceil(total / limit);
+  const safePage = total_pages === 0 ? 1 : Math.min(Math.max(1, page), total_pages);
+  const offset = (safePage - 1) * limit;
+  const rows = await listPromisesPage(payerId, limit, offset);
+  const items = rows.map((promise) => present(promise, []));
+  return { items, total, page: safePage, limit, total_pages };
 }
 
 export async function updateChecklist(

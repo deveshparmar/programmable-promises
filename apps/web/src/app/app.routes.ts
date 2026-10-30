@@ -15,6 +15,11 @@ const authGuard: CanActivateFn = () => {
 export const routes: Routes = [
   { path: "login", component: LoginComponent },
   { path: "", component: ListComponent, canActivate: [authGuard] },
+  {
+    path: "dashboard",
+    loadComponent: () => import("./pages/dashboard.component").then((m) => m.DashboardComponent),
+    canActivate: [authGuard],
+  },
   { path: "new", component: CreateComponent, canActivate: [authGuard] },
   { path: "review", component: ReviewComponent, canActivate: [authGuard] },
   { path: "promises/:id", component: DetailComponent, canActivate: [authGuard] },

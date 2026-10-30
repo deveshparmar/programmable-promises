@@ -7,17 +7,25 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w @pp/shared && npm run build -w @pp/api && npm run build -w @pp/web",
+    "build": "npm run build -w @pp/shared && npm run build -w @pp/api && npm run build -w @pp/web && npm run build -w @pp/mcp",
     "build:api": "npm run build -w @pp/shared && npm run build -w @pp/api",
     "dev:api": "npm run build -w @pp/shared && npm run dev -w @pp/api",
     "dev:web": "npm run start -w @pp/web",
     "test": "node --import tsx --test packages/shared/src/decision.test.ts packages/shared/src/transitions.test.ts apps/api/src/images/phash.test.ts",
-    "eval": "node eval/accuracy.mjs"
+    "eval": "node eval/accuracy.mjs",
+    "mcp": "npm run dev -w @pp/mcp",
+    "paypal-token": "npm run paypal-token -w @pp/mcp"
   },
   "devDependencies": {
     "tsx": "^4.19.3"
   },
   "overrides": {
-    "esbuild": "0.25.12"
+    "esbuild": "0.25.12",
+    "@angular/core": "19.2.25",
+    "@angular/common": "19.2.25",
+    "@angular/compiler": "19.2.25",
+    "@angular/forms": "19.2.25",
+    "@angular/platform-browser": "19.2.25",
+    "@angular/router": "19.2.25"
   }
 }

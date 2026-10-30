@@ -7,12 +7,13 @@
     "build": "ng build --configuration production"
   },
   "dependencies": {
-    "@angular/common": "^19.2.14",
-    "@angular/compiler": "^19.2.14",
-    "@angular/core": "^19.2.14",
-    "@angular/forms": "^19.2.14",
-    "@angular/platform-browser": "^19.2.14",
-    "@angular/router": "^19.2.14",
+    "@angular/common": "19.2.25",
+    "@angular/compiler": "19.2.25",
+    "@angular/core": "19.2.25",
+    "@angular/forms": "19.2.25",
+    "@angular/platform-browser": "19.2.25",
+    "@angular/router": "19.2.25",
+    "ag-studio": "^3.0.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1",
     "zone.js": "^0.15.1"

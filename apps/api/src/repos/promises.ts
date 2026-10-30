@@ -85,6 +85,22 @@ export async function listPromises(payerId: string): Promise<PromiseRow[]> {
   return result.rows.map(asPromise);
 }
 
+export async function countPromises(payerId: string): Promise<number> {
+  const result = await pool.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM promises WHERE payer_id = $1",
+    [payerId],
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function listPromisesPage(payerId: string, limit: number, offset: number): Promise<PromiseRow[]> {
+  const result = await pool.query<PromiseRow>(
+    `SELECT ${PROMISE_COLUMNS} FROM promises WHERE payer_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+    [payerId, limit, offset],
+  );
+  return result.rows.map(asPromise);
+}
+
 export async function insertPromise(
   client: DbClient,
   input: {

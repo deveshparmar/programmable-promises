@@ -13,6 +13,7 @@ import { UiFeedbackComponent } from "./ui-feedback.component";
         <nav>
           @if (signedIn()) {
             <span class="muted">{{ payerEmail() }}</span>
+            <a routerLink="/dashboard">Dashboard</a>
             <a routerLink="/new">New promise</a>
             <a routerLink="/review">Review</a>
             <button class="text-button" type="button" (click)="signOut()">Sign out</button>

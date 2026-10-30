@@ -49,6 +49,37 @@ The dev UI is [http://localhost:4200](http://localhost:4200). Copy `.env.example
 
 Amounts are USD cents. The minimum is $1.00 and the demo cap is $10,000. There is no platform fee.
 
+## AG Studio dashboard
+
+After sign-in, open **Dashboard** (`/dashboard`) for an embedded **AG Studio** report:
+
+- KPI tiles, status charts, and a promise pipeline grid fed by `GET /api/analytics/studio-data`
+- A second page for AI verification evidence (checklist item pass/fail and confidence)
+- Cross-filtering, view/edit layout modes, and layout saved in `localStorage`
+- **Studio Agent Framework** (AI assistant panel) proxied through `POST /api/studio/llm-turn` using your existing `AI_API_KEY`
+
+AG Studio runs in the browser; request a [trial licence](https://www.ag-grid.com/studio/) from AG Grid for production. Local hackathon demos work with the trial/watermark.
+
+## MCP (PayPal + this app)
+
+The hackathon [PayPal MCP server](https://developer.paypal.com/ai-tools/mcp-server) talks to sandbox PayPal APIs. This repo adds a **Programmable Promises** MCP server that wraps the REST API so agents can create promises, read status, and submit proof.
+
+1. Start the stack (`docker compose up --build` or `npm run dev:api`).
+2. Copy `config/mcp.cursor.example.json` into Cursor **Settings → MCP** (merge with your existing servers).
+3. Refresh the PayPal token when it expires:
+
+```bash
+npm run paypal-token
+```
+
+Paste the token into the `paypal` server's `PAYPAL_ACCESS_TOKEN`. Run `npm run mcp` only if you want to test the stdio server manually.
+
+**Payer agent flow:** `pp_login` → `pp_create_promise` → `pp_confirm_checklist` (confirm) → `pp_create_funding_order` → human approves **PayPal Buttons** in the browser.
+
+**Worker agent flow:** `pp_issue_challenge` → `pp_submit_proof` with a local image path.
+
+Funding always needs a human in PayPal's UI; agents must not bypass that.
+
 ## AI tools
 
 Checklist generation and proof verification use the OpenAI Chat Completions API through `AI_MODEL`, behind a `Verifier` interface. The model's own pass or fail is logged and is not the decision. A rules engine requires every required item to pass at confidence 0.7 or higher, a weighted score at or above the threshold (default 0.8), and a matching challenge code. Anything unclear becomes a human review. The model never calls PayPal.

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "programmable-promises": {
+      "command": "node",
+      "args": ["apps/mcp/dist/index.js"],
+      "env": {
+        "PP_API_BASE_URL": "http://localhost:3000/api"
+      }
+    },
+    "paypal": {
+      "command": "npx",
+      "args": ["-y", "@paypal/mcp", "--tools=all"],
+      "env": {
+        "PAYPAL_ACCESS_TOKEN": "PASTE_TOKEN_FROM_npm_run_paypal-token",
+        "PAYPAL_ENVIRONMENT": "SANDBOX"
+      }
+    }
+  }
+}

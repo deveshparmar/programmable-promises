@@ -26,6 +26,24 @@ button, input, textarea { font: inherit; color: inherit; }
 a { color: var(--accent); }
 
 .shell { max-width: 980px; margin: 0 auto; padding: 28px 20px 80px; }
+.shell:has(.dashboard-page) { max-width: min(1400px, 96vw); }
+.dashboard-page h1 { font-size: 38px; }
+.studio-host {
+  height: calc(100vh - 200px);
+  min-height: 560px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.studio-host ag-studio,
+.studio-host .ag-studio-root {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
 .top { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 28px; }
 .brand { font-family: var(--serif); font-size: 28px; text-decoration: none; color: var(--ink); letter-spacing: -0.03em; }
 .brand span { color: var(--accent); }
@@ -48,6 +66,9 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .pill.bad { background: var(--danger-soft); color: var(--danger); }
 .list { display: grid; gap: 12px; }
+.pagination { justify-content: center; margin-top: 8px; }
+.pagination-meta { font-size: 14px; min-width: 12rem; text-align: center; }
+.pagination-count { display: block; font-size: 12px; }
 .promise-link { display: flex; justify-content: space-between; gap: 12px; text-decoration: none; color: inherit; }
 .money { font-variant-numeric: tabular-nums; }
 .error { background: var(--danger-soft); color: var(--danger); border-radius: 12px; padding: 10px 12px; }

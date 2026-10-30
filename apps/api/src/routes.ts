@@ -17,6 +17,7 @@ import {
   createPromise,
   getPromise,
   getPromiseList,
+  getPromiseListPage,
   issueChallenge,
   listVerifications,
   reviewPromise,
@@ -24,6 +25,8 @@ import {
   updateChecklist,
 } from "./services/promiseService.js";
 import { findPromiseById } from "./repos/promises.js";
+import { getStudioData } from "./services/analyticsService.js";
+import { proxyStudioTurn } from "./services/studioLlmProxy.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -100,7 +103,30 @@ export function apiRouter(): Router {
 
   router.get("/promises", requirePayer, async (req, res, next) => {
     try {
+      const hasPage = req.query.page !== undefined || req.query.limit !== undefined;
+      if (hasPage) {
+        const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1);
+        const limit = Math.min(50, Math.max(1, Number.parseInt(String(req.query.limit ?? "10"), 10) || 10));
+        res.json(await getPromiseListPage(req.payer!.id, page, limit));
+        return;
+      }
       res.json(await getPromiseList(req.payer!.id));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/analytics/studio-data", requirePayer, async (req, res, next) => {
+    try {
+      res.json(await getStudioData(req.payer!.id));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/studio/llm-turn", requirePayer, async (req, res, next) => {
+    try {
+      res.json(await proxyStudioTurn(req.body));
     } catch (error) {
       next(error);
     }

@@ -25,6 +25,29 @@ export class ApiService {
     return this.http.get<PromiseView[]>("/api/promises").pipe(catchError(this.asError));
   }
 
+  listPage(page: number, limit = 10): Observable<{
+    items: PromiseView[];
+    total: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+  }> {
+    return this.http
+      .get<{ items: PromiseView[]; total: number; page: number; limit: number; total_pages: number }>(
+        "/api/promises",
+        { params: { page: String(page), limit: String(limit) } },
+      )
+      .pipe(catchError(this.asError));
+  }
+
+  studioData(): Observable<{ promises: Record<string, unknown>[]; verification_items: Record<string, unknown>[] }> {
+    return this.http
+      .get<{ promises: Record<string, unknown>[]; verification_items: Record<string, unknown>[] }>(
+        "/api/analytics/studio-data",
+      )
+      .pipe(catchError(this.asError));
+  }
+
   create(body: unknown): Observable<PromiseView> {
     return this.write("post", "/api/promises", body);
   }
