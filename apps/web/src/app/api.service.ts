@@ -3,6 +3,7 @@ import { Injectable, inject } from "@angular/core";
 import { Observable, throwError } from "rxjs";
 import { catchError } from "rxjs/operators";
 import type { PromiseView, Verification } from "./models";
+import { apiUrl } from "./api-url";
 
 export const SHARE_TOKEN = new HttpContextToken<string | null>(() => null);
 export const SKIP_PAYER_AUTH = new HttpContextToken(() => false);
@@ -12,17 +13,17 @@ export class ApiService {
   private readonly http = inject(HttpClient);
 
   login(email: string): Observable<{ token: string; email: string; name: string }> {
-    return this.http.post<{ token: string; email: string; name: string }>("/api/auth/login", { email }, {
+    return this.http.post<{ token: string; email: string; name: string }>(apiUrl("/api/auth/login"), { email }, {
       headers: { "Idempotency-Key": crypto.randomUUID() },
     }).pipe(catchError(this.asError));
   }
 
   config(): Observable<{ paypal_client_id: string }> {
-    return this.http.get<{ paypal_client_id: string }>("/api/config").pipe(catchError(this.asError));
+    return this.http.get<{ paypal_client_id: string }>(apiUrl("/api/config")).pipe(catchError(this.asError));
   }
 
   list(): Observable<PromiseView[]> {
-    return this.http.get<PromiseView[]>("/api/promises").pipe(catchError(this.asError));
+    return this.http.get<PromiseView[]>(apiUrl("/api/promises")).pipe(catchError(this.asError));
   }
 
   listPage(page: number, limit = 10): Observable<{
@@ -34,7 +35,7 @@ export class ApiService {
   }> {
     return this.http
       .get<{ items: PromiseView[]; total: number; page: number; limit: number; total_pages: number }>(
-        "/api/promises",
+        apiUrl("/api/promises"),
         { params: { page: String(page), limit: String(limit) } },
       )
       .pipe(catchError(this.asError));
@@ -43,33 +44,33 @@ export class ApiService {
   studioData(): Observable<{ promises: Record<string, unknown>[]; verification_items: Record<string, unknown>[] }> {
     return this.http
       .get<{ promises: Record<string, unknown>[]; verification_items: Record<string, unknown>[] }>(
-        "/api/analytics/studio-data",
+        apiUrl("/api/analytics/studio-data"),
       )
       .pipe(catchError(this.asError));
   }
 
   create(body: unknown): Observable<PromiseView> {
-    return this.write("post", "/api/promises", body);
+    return this.write("post", apiUrl("/api/promises"), body);
   }
 
   get(id: string, shareToken?: string): Observable<PromiseView> {
-    return this.http.get<PromiseView>(`/api/promises/${id}`, { context: this.workerContext(shareToken) }).pipe(catchError(this.asError));
+    return this.http.get<PromiseView>(apiUrl(`/api/promises/${id}`), { context: this.workerContext(shareToken) }).pipe(catchError(this.asError));
   }
 
   saveChecklist(id: string, body: unknown): Observable<PromiseView> {
-    return this.write("put", `/api/promises/${id}/checklist`, body);
+    return this.write("put", apiUrl(`/api/promises/${id}/checklist`), body);
   }
 
   fund(id: string): Observable<{ order_id: string }> {
-    return this.write("post", `/api/promises/${id}/fund`, {});
+    return this.write("post", apiUrl(`/api/promises/${id}/fund`), {});
   }
 
   confirmFund(id: string): Observable<PromiseView> {
-    return this.write("post", `/api/promises/${id}/fund/confirm`, {});
+    return this.write("post", apiUrl(`/api/promises/${id}/fund/confirm`), {});
   }
 
   challenge(id: string, shareToken: string): Observable<{ challenge_code: string }> {
-    return this.write("post", `/api/promises/${id}/challenge`, {}, shareToken);
+    return this.write("post", apiUrl(`/api/promises/${id}/challenge`), {}, shareToken);
   }
 
   submit(id: string, shareToken: string, file: File): Observable<{
@@ -87,28 +88,28 @@ export class ApiService {
       status: string;
       workerFeedback: string;
       items: { text: string; passed: boolean; evidence: string }[];
-    }>(`/api/promises/${id}/submissions`, data, {
+    }>(apiUrl(`/api/promises/${id}/submissions`), data, {
       headers: { "Idempotency-Key": crypto.randomUUID(), "X-Share-Token": shareToken },
       context: new HttpContext().set(SKIP_PAYER_AUTH, true),
     }).pipe(catchError(this.asError));
   }
 
   verifications(id: string, shareToken?: string): Observable<{ verifications: Verification[] }> {
-    return this.http.get<{ verifications: Verification[] }>(`/api/promises/${id}/verifications`, {
+    return this.http.get<{ verifications: Verification[] }>(apiUrl(`/api/promises/${id}/verifications`), {
       context: this.workerContext(shareToken),
     }).pipe(catchError(this.asError));
   }
 
   review(id: string, body: unknown): Observable<PromiseView> {
-    return this.write("post", `/api/promises/${id}/review`, body);
+    return this.write("post", apiUrl(`/api/promises/${id}/review`), body);
   }
 
   cancel(id: string): Observable<PromiseView> {
-    return this.write("post", `/api/promises/${id}/cancel`, {});
+    return this.write("post", apiUrl(`/api/promises/${id}/cancel`), {});
   }
 
   settle(id: string): Observable<PromiseView> {
-    return this.write("post", `/api/promises/${id}/settle`, {});
+    return this.write("post", apiUrl(`/api/promises/${id}/settle`), {});
   }
 
   private write<T>(method: "post" | "put", url: string, body: unknown, shareToken?: string): Observable<T> {

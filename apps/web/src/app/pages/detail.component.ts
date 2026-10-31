@@ -3,6 +3,7 @@ import { Component, ElementRef, NgZone, OnDestroy, inject, signal, viewChild } f
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
 import { ApiService } from "../api.service";
+import { apiUrl } from "../api-url";
 import { ToastService } from "../toast.service";
 import { money, pillClass, statusLabel, type ChecklistItem, type PromiseView, type Verification } from "../models";
 
@@ -123,7 +124,7 @@ export class DetailComponent implements OnDestroy {
     this.reload();
     const token = sessionStorage.getItem("pp_token");
     if (token) {
-      this.source = new EventSource(`/api/promises/${id}/events?access_token=${encodeURIComponent(token)}`);
+      this.source = new EventSource(apiUrl(`/api/promises/${id}/events?access_token=${encodeURIComponent(token)}`));
       this.source.onmessage = () => this.zone.run(() => this.reload());
     }
   }

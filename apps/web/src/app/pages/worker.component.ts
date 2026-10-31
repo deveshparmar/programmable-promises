@@ -1,6 +1,7 @@
 import { Component, NgZone, OnDestroy, inject, signal } from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
 import { ApiService } from "../api.service";
+import { apiUrl } from "../api-url";
 import { ToastService } from "../toast.service";
 import { money, pillClass, statusLabel, type PromiseView, type Verification } from "../models";
 
@@ -131,7 +132,7 @@ export class WorkerComponent implements OnDestroy {
   }
 
   private connectLiveUpdates(): void {
-    const url = `/api/promises/${this.id}/events?token=${encodeURIComponent(this.token)}`;
+    const url = apiUrl(`/api/promises/${this.id}/events?token=${encodeURIComponent(this.token)}`);
     this.eventSource = new EventSource(url);
     this.eventSource.onmessage = (event) => {
       this.zone.run(() => {

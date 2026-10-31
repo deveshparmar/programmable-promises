@@ -1,4 +1,5 @@
 import type { AgAiEvent, AgLlmAdapter, AgLlmRequest, AgLlmResponse } from "ag-studio";
+import { apiUrl } from "../api-url";
 
 function textFromResponse(response: AgLlmResponse): string {
   for (const item of response.output ?? []) {
@@ -13,7 +14,7 @@ function textFromResponse(response: AgLlmResponse): string {
 export function createStudioProxyAdapter(token: () => string | null): AgLlmAdapter {
   return {
     executeTurn(request: AgLlmRequest, options) {
-      const complete = fetch("/api/studio/llm-turn", {
+      const complete = fetch(apiUrl("/api/studio/llm-turn"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

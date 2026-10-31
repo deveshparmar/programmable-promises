@@ -9,7 +9,12 @@ import { apiRouter } from "./routes.js";
 import { expireDue } from "./services/paymentService.js";
 
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    allowedHeaders: ["Authorization", "Content-Type", "Idempotency-Key", "X-Share-Token"],
+  }),
+);
 app.use(express.json({ limit: "1mb" }));
 
 app.use("/api", apiRouter());
