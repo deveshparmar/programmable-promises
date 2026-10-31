@@ -53,21 +53,35 @@ h1, h2 { font-family: var(--serif); font-weight: 500; letter-spacing: -0.03em; m
 h1 { font-size: 46px; line-height: 1.05; }
 .lede { color: var(--muted); max-width: 46rem; margin-top: 0; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px; box-shadow: var(--shadow); }
-.stack { display: grid; gap: 16px; }
+.stack { display: grid; gap: 16px; align-content: start; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 input, textarea { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 textarea { min-height: 120px; resize: vertical; }
-button.primary, a.primary { background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 12px 18px; text-decoration: none; cursor: pointer; }
-button.secondary { background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; cursor: pointer; }
-button.danger { background: var(--danger); color: #fff; border: 0; border-radius: 999px; padding: 10px 16px; cursor: pointer; }
-.card.stack > button.primary,
-.card.stack > button.secondary,
-.card.stack > button.danger {
-  width: fit-content;
+button.primary,
+a.primary,
+button.secondary,
+button.danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
   max-width: 100%;
+  height: auto;
+  min-height: 0;
+  line-height: 1.25;
+  text-align: center;
+  flex: 0 0 auto;
+  align-self: start;
   justify-self: start;
 }
+button.primary, a.primary { background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 12px 18px; text-decoration: none; cursor: pointer; font-size: 15px; }
+button.secondary { background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; cursor: pointer; font-size: 15px; }
+button.danger { background: var(--danger); color: #fff; border: 0; border-radius: 999px; padding: 12px 18px; cursor: pointer; font-size: 15px; }
+.split > .card.stack { align-self: start; }
+.money-actions { margin-top: 4px; }
+.paypal-host { min-height: 45px; max-width: 100%; }
+.paypal-host iframe { max-width: 100% !important; }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 13px; background: var(--accent-soft); color: var(--accent); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }

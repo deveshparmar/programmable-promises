@@ -224,8 +224,14 @@ export async function payoutItemStatus(batchId: string): Promise<string> {
   const response = await paypalFetch(`/v1/payments/payouts/${batchId}`, { method: "GET" });
   const body = await readJson(response);
   if (!response.ok) fail(response, body);
-  const items = body.items as { transaction_status?: string }[] | undefined;
-  return items?.[0]?.transaction_status ?? "PENDING";
+  const items = body.items as { transaction_status?: string; errors?: { message?: string }[] }[] | undefined;
+  const item = items?.[0];
+  if (item?.transaction_status) return item.transaction_status;
+  const batchStatus = (body.batch_header as { batch_status?: string } | undefined)?.batch_status;
+  if (batchStatus === "SUCCESS") return "SUCCESS";
+  const errMsg = item?.errors?.[0]?.message;
+  if (errMsg) console.warn("PayPal payout item error", batchId, errMsg);
+  return "PENDING";
 }
 
 export async function voidAuthorization(authorizationId: string, promiseId: string): Promise<void> {

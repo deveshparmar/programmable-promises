@@ -71,14 +71,16 @@ declare global {
             <h2>Money</h2>
             @if (current.status === 'AWAITING_FUNDING') {
               <p>Confirming the checklist lets you authorize a hold. Capture happens only after a pass or your approval.</p>
-              <div #paypal></div>
+              <div class="paypal-host" #paypal></div>
             }
-            @if (current.status === 'PAYING' || current.status === 'PAYMENT_FAILED' || current.status === 'CAPTURED') {
-              <button class="primary" type="button" (click)="retryPay()">Retry payment</button>
-            }
-            @if (canCancel()) {
-              <button class="danger" type="button" (click)="cancel()">Cancel and release the hold</button>
-            }
+            <div class="row money-actions">
+              @if (current.status === 'PAYING' || current.status === 'PAYMENT_FAILED' || current.status === 'CAPTURED') {
+                <button class="primary" type="button" (click)="retryPay()">Retry payment</button>
+              }
+              @if (canCancel()) {
+                <button class="danger" type="button" (click)="cancel()">Cancel and release hold</button>
+              }
+            </div>
             @if (current.status === 'PAID') { <p>The worker has been paid.</p> }
           </div>
         </div>

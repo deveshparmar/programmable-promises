@@ -128,6 +128,62 @@ async function capture(promise: PromiseRow): Promise<PromiseRow> {
   }
 }
 
+/** SUCCESS and UNCLAIMED both mean PayPal accepted the payout (sandbox often stays UNCLAIMED until claimed). */
+const PAYOUT_PAID_STATUSES = new Set(["SUCCESS", "UNCLAIMED"]);
+const PAYOUT_TERMINAL_FAIL = ["FAILED", "DENIED", "BLOCKED", "RETURNED", "REFUNDED", "CANCELED"];
+/** Stay under Render's ~30s HTTP limit; background job rechecks every 30s. */
+const PAYOUT_POLL_ATTEMPTS = 8;
+const PAYOUT_POLL_DELAY_MS = 2000;
+
+function payoutWaitingDetail(itemStatus: string): string {
+  if (itemStatus === "UNCLAIMED") {
+    return "PayPal sent the payout but it is unclaimed. Use a sandbox personal account email as the worker, or claim it in sandbox PayPal. The server rechecks automatically.";
+  }
+  if (itemStatus === "PENDING" || itemStatus === "ONHOLD") {
+    return `PayPal payout is ${itemStatus}. Wait a moment, tap Retry payment, or let the server recheck (about every 30s).`;
+  }
+  return `PayPal payout status is ${itemStatus}. Tap Retry payment or fix the worker sandbox email.`;
+}
+
+function paidDetailForStatus(itemStatus: string): string | null {
+  if (itemStatus === "UNCLAIMED") {
+    return "Payout sent to the worker email (unclaimed in PayPal until they accept in sandbox).";
+  }
+  return null;
+}
+
+async function applyPayoutItemStatus(promise: PromiseRow, itemStatus: string): Promise<PromiseRow> {
+  if (PAYOUT_PAID_STATUSES.has(itemStatus)) {
+    const detail = paidDetailForStatus(itemStatus);
+    const paid = await withTx(async (client) => transitionStatus(client, promise.id, "CAPTURED", "PAID", detail));
+    await emit(paid);
+    return paid;
+  }
+  if (PAYOUT_TERMINAL_FAIL.includes(itemStatus)) {
+    const failed = await withTx(async (client) =>
+      transitionStatus(client, promise.id, "CAPTURED", "PAYMENT_FAILED", `Payout item is ${itemStatus}.`),
+    );
+    await emit(failed);
+    return failed;
+  }
+  await withTx(async (client) => {
+    await patchPromise(client, promise.id, { status_detail: payoutWaitingDetail(itemStatus) });
+  });
+  return must(promise.id);
+}
+
+async function pollPayoutBatch(promise: PromiseRow, batchId: string): Promise<PromiseRow> {
+  let itemStatus = "PENDING";
+  for (let attempt = 0; attempt < PAYOUT_POLL_ATTEMPTS; attempt += 1) {
+    itemStatus = await payoutItemStatus(batchId);
+    if (PAYOUT_PAID_STATUSES.has(itemStatus) || PAYOUT_TERMINAL_FAIL.includes(itemStatus)) {
+      return applyPayoutItemStatus(promise, itemStatus);
+    }
+    await new Promise((resolve) => setTimeout(resolve, PAYOUT_POLL_DELAY_MS));
+  }
+  return applyPayoutItemStatus(promise, itemStatus);
+}
+
 async function pay(promise: PromiseRow): Promise<PromiseRow> {
   let batchId = promise.paypal_payout_batch_id;
   if (!batchId) {
@@ -142,40 +198,42 @@ async function pay(promise: PromiseRow): Promise<PromiseRow> {
       await emit(failed);
       return failed;
     }
+    await withTx(async (client) => {
+      await patchPromise(client, promise.id, { paypal_payout_batch_id: batchId });
+      await poolEvent(client, promise.id, "api.payout", { payout_batch_id: batchId });
+    });
   }
-  await withTx(async (client) => {
-    await patchPromise(client, promise.id, { paypal_payout_batch_id: batchId });
-    await poolEvent(client, promise.id, "api.payout", { payout_batch_id: batchId });
-  });
-  let itemStatus = "PENDING";
-  const terminalFail = ["FAILED", "DENIED", "BLOCKED", "RETURNED", "REFUNDED", "CANCELED"];
-  for (let attempt = 0; attempt < 24; attempt += 1) {
-    itemStatus = await payoutItemStatus(batchId);
-    if (itemStatus === "SUCCESS") {
-      const paid = await withTx(async (client) => transitionStatus(client, promise.id, "CAPTURED", "PAID", null));
-      await emit(paid);
-      return paid;
+  return pollPayoutBatch(await must(promise.id), batchId);
+}
+
+/** Recheck CAPTURED promises on a timer (Render HTTP requests cannot poll PayPal for minutes). */
+export async function pollPendingPayouts(): Promise<void> {
+  const { rows } = await pool.query<PromiseRow>(
+    `SELECT id, payer_id, worker_email, title, description, amount_minor, currency, status, deadline_at,
+            share_token_hash, checklist_version, pending_challenge_code, paypal_order_id,
+            paypal_authorization_id, paypal_capture_id, paypal_payout_batch_id, pass_threshold, status_detail,
+            created_at, updated_at
+     FROM promises
+     WHERE status = 'CAPTURED' AND paypal_payout_batch_id IS NOT NULL`,
+  );
+  for (const row of rows) {
+    try {
+      await withLock(`lock:pay:${row.id}`, 55_000, async () => {
+        const promise = await must(row.id);
+        if (promise.status !== "CAPTURED" || !promise.paypal_payout_batch_id) return;
+        const itemStatus = await payoutItemStatus(promise.paypal_payout_batch_id);
+        if (itemStatus === "PENDING" || itemStatus === "ONHOLD") {
+          await withTx(async (client) => {
+            await patchPromise(client, promise.id, { status_detail: payoutWaitingDetail(itemStatus) });
+          });
+          return;
+        }
+        await applyPayoutItemStatus(promise, itemStatus);
+      });
+    } catch (error) {
+      console.error("Payout poll failed", row.id, error);
     }
-    if (terminalFail.includes(itemStatus)) break;
-    await new Promise((resolve) => setTimeout(resolve, 2500));
   }
-  if (itemStatus === "SUCCESS") return must(promise.id);
-  if (terminalFail.includes(itemStatus)) {
-    const failed = await withTx(async (client) =>
-      transitionStatus(client, promise.id, "CAPTURED", "PAYMENT_FAILED", `Payout item is ${itemStatus}.`),
-    );
-    await emit(failed);
-    return failed;
-  }
-  const waiting = await must(promise.id);
-  const pendingDetail =
-    itemStatus === "PENDING" || itemStatus === "UNCLAIMED" || itemStatus === "ONHOLD"
-      ? "PayPal is still sending the payout. Wait a moment, then use Retry payment."
-      : `Payout item is ${itemStatus}.`;
-  await withTx(async (client) => {
-    await patchPromise(client, waiting.id, { status_detail: pendingDetail });
-  });
-  return must(promise.id);
 }
 
 export async function cancelPromise(promiseId: string, payerId: string): Promise<PromiseRow> {

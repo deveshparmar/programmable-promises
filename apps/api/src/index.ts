@@ -6,7 +6,7 @@ import { ensureKafkaTopics } from "./kafka/client.js";
 import { migrate, waitForDatabase } from "./db.js";
 import { HttpError } from "./errors.js";
 import { apiRouter } from "./routes.js";
-import { expireDue } from "./services/paymentService.js";
+import { expireDue, pollPendingPayouts } from "./services/paymentService.js";
 
 const app = express();
 app.use(
@@ -54,6 +54,7 @@ async function main(): Promise<void> {
   });
   setInterval(() => {
     void expireDue();
+    void pollPendingPayouts();
   }, 30_000).unref();
 }
 
