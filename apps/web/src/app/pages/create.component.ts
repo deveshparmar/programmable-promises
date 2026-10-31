@@ -2,6 +2,7 @@ import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { ApiService } from "../api.service";
+import { buildWorkerUrl } from "../worker-url";
 import { ToastService } from "../toast.service";
 import { localDateInput, toMinor } from "../models";
 
@@ -57,8 +58,9 @@ export class CreateComponent {
       deadline_at: new Date(this.deadline).toISOString(),
     }).subscribe({
       next: (promise) => {
-        if (promise.worker_url && promise.share_token) {
-          sessionStorage.setItem(`pp_worker_${promise.id}`, promise.worker_url);
+        if (promise.share_token) {
+          sessionStorage.setItem(`pp_share_${promise.id}`, promise.share_token);
+          sessionStorage.setItem(`pp_worker_${promise.id}`, buildWorkerUrl(promise.id, promise.share_token));
         }
         this.toast.success("Promise created. Confirm the checklist, then fund it.");
         void this.router.navigate(["/promises", promise.id]);

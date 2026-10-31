@@ -63,7 +63,12 @@ export function apiRouter(): Router {
   });
 
   router.get("/config", (_req, res) => {
-    res.json({ paypal_client_id: config.paypalClientId, paypal_mode: config.paypalMode, currency: "USD" });
+    res.json({
+      paypal_client_id: config.paypalClientId,
+      paypal_mode: config.paypalMode,
+      currency: "USD",
+      app_base_url: config.appBaseUrl,
+    });
   });
 
   router.post("/auth/login", async (req, res, next) => {

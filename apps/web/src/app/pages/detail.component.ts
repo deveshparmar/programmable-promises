@@ -4,6 +4,7 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
 import { ApiService } from "../api.service";
 import { apiUrl } from "../api-url";
+import { normalizeWorkerUrl } from "../worker-url";
 import { ToastService } from "../toast.service";
 import { money, pillClass, statusLabel, type ChecklistItem, type PromiseView, type Verification } from "../models";
 
@@ -120,7 +121,11 @@ export class DetailComponent implements OnDestroy {
 
   constructor() {
     const id = this.route.snapshot.paramMap.get("id") ?? "";
-    this.workerUrl.set(sessionStorage.getItem(`pp_worker_${id}`) ?? "");
+    const share = sessionStorage.getItem(`pp_share_${id}`);
+    const stored = sessionStorage.getItem(`pp_worker_${id}`) ?? "";
+    const url = normalizeWorkerUrl(stored, id, share);
+    this.workerUrl.set(url);
+    if (url && url !== stored) sessionStorage.setItem(`pp_worker_${id}`, url);
     this.reload();
     const token = sessionStorage.getItem("pp_token");
     if (token) {

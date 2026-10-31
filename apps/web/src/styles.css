@@ -61,6 +61,13 @@ textarea { min-height: 120px; resize: vertical; }
 button.primary, a.primary { background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 12px 18px; text-decoration: none; cursor: pointer; }
 button.secondary { background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; cursor: pointer; }
 button.danger { background: var(--danger); color: #fff; border: 0; border-radius: 999px; padding: 10px 16px; cursor: pointer; }
+.card.stack > button.primary,
+.card.stack > button.secondary,
+.card.stack > button.danger {
+  width: fit-content;
+  max-width: 100%;
+  justify-self: start;
+}
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 13px; background: var(--accent-soft); color: var(--accent); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
